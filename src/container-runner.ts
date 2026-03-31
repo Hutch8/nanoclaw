@@ -28,6 +28,7 @@ import {
 import { detectAuthMode } from './credential-proxy.js';
 import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup } from './types.js';
+import { readEnvFile } from './env.js';
 
 // Sentinel markers for robust output parsing (must match agent-runner)
 const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
@@ -238,15 +239,25 @@ function buildContainerArgs(
     args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
   }
 
+  // Pass Bluesky credentials if configured
+  const bluesky = readEnvFile(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD']);
+  if (bluesky.BLUESKY_IDENTIFIER) {
+    args.push('-e', `BLUESKY_IDENTIFIER=${bluesky.BLUESKY_IDENTIFIER}`);
+  }
+  if (bluesky.BLUESKY_APP_PASSWORD) {
+    args.push('-e', `BLUESKY_APP_PASSWORD=${bluesky.BLUESKY_APP_PASSWORD}`);
+  }
+
   // Runtime-specific args for host gateway resolution
   args.push(...hostGatewayArgs());
 
   // Run as host user so bind-mounted files are accessible.
-  // Skip when running as root (uid 0), as the container's node user (uid 1000),
-  // or when getuid is unavailable (native Windows without WSL).
+  // Skip when running as root (uid 0) or when getuid is unavailable
+  // (native Windows without WSL). Always pass --user for non-root users
+  // to ensure proper namespace mapping and file permissions in containers.
   const hostUid = process.getuid?.();
   const hostGid = process.getgid?.();
-  if (hostUid != null && hostUid !== 0 && hostUid !== 1000) {
+  if (hostUid != null && hostUid !== 0) {
     args.push('--user', `${hostUid}:${hostGid}`);
     args.push('-e', 'HOME=/home/node');
   }
