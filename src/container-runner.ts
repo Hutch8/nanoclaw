@@ -168,9 +168,10 @@ function buildVolumeMounts(
   // Per-group IPC namespace: each group gets its own IPC directory
   // This prevents cross-group privilege escalation via IPC
   const groupIpcDir = resolveGroupIpcPath(group.folder);
-  fs.mkdirSync(path.join(groupIpcDir, 'messages'), { recursive: true });
-  fs.mkdirSync(path.join(groupIpcDir, 'tasks'), { recursive: true });
-  fs.mkdirSync(path.join(groupIpcDir, 'input'), { recursive: true });
+  // mode 0o777: container runs as a different uid (100999), needs world-write access
+  fs.mkdirSync(path.join(groupIpcDir, 'messages'), { recursive: true, mode: 0o777 });
+  fs.mkdirSync(path.join(groupIpcDir, 'tasks'), { recursive: true, mode: 0o777 });
+  fs.mkdirSync(path.join(groupIpcDir, 'input'), { recursive: true, mode: 0o777 });
   mounts.push({
     hostPath: groupIpcDir,
     containerPath: '/workspace/ipc',
@@ -247,6 +248,12 @@ function buildContainerArgs(
   }
   if (bluesky.BLUESKY_APP_PASSWORD) {
     args.push('-e', `BLUESKY_APP_PASSWORD=${bluesky.BLUESKY_APP_PASSWORD}`);
+  }
+
+  // Pass ComfyUI URL if configured
+  const comfyui = readEnvFile(['COMFYUI_BASE_URL']);
+  if (comfyui.COMFYUI_BASE_URL) {
+    args.push('-e', `COMFYUI_BASE_URL=${comfyui.COMFYUI_BASE_URL}`);
   }
 
   // Runtime-specific args for host gateway resolution
